@@ -1,0 +1,379 @@
+import React, { useState } from 'react';
+import { Upload, Download, Play, Pause, Volume2, FileText, Mic, Settings } from 'lucide-react';
+
+export default function AudiobookConverter() {
+  const [htmlContent, setHtmlContent] = useState('');
+  const [narrationScript, setNarrationScript] = useState('');
+  const [settings, setSettings] = useState({
+    voice: 'neural',
+    speed: 1.0,
+    pitch: 1.0,
+    pauseShort: 0.5,
+    pauseMedium: 1.0,
+    pauseLong: 2.0
+  });
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [activeTab, setActiveTab] = useState('upload');
+
+  const processHTML = () => {
+    setIsProcessing(true);
+    
+    // Simula processamento
+    setTimeout(() => {
+      let processed = htmlContent;
+      
+      // Remove tags HTML básicas
+      processed = processed.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
+      processed = processed.replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, '');
+      
+      // Converte estruturas para marcações de narração
+      processed = processed.replace(/<h1[^>]*>(.*?)<\/h1>/gi, '\n\n[PAUSA LONGA]\n[TOM SOLENE] $1 [TOM NORMAL]\n[PAUSA LONGA]\n\n');
+      processed = processed.replace(/<h2[^>]*>(.*?)<\/h2>/gi, '\n\n[PAUSA LONGA]\n$1\n[PAUSA MÉDIA]\n\n');
+      processed = processed.replace(/<h3[^>]*>(.*?)<\/h3>/gi, '\n\n[PAUSA MÉDIA]\n$1\n[PAUSA CURTA]\n\n');
+      
+      processed = processed.replace(/<strong[^>]*>(.*?)<\/strong>/gi, '[ÊNFASE] $1 [/ÊNFASE]');
+      processed = processed.replace(/<em[^>]*>(.*?)<\/em>/gi, '[ênfase leve] $1 [/ênfase leve]');
+      processed = processed.replace(/<blockquote[^>]*>(.*?)<\/blockquote>/gi, '\n[TOM REFLEXIVO]\n$1\n[TOM NORMAL]\n');
+      
+      // Remove tags restantes
+      processed = processed.replace(/<[^>]+>/g, '');
+      
+      // Limpa espaços extras
+      processed = processed.replace(/\n{3,}/g, '\n\n');
+      processed = processed.trim();
+      
+      // Adiciona cabeçalho
+      const script = `=== SCRIPT DE NARRAÇÃO ===
+Configurações de Voz: ${settings.voice}
+Velocidade: ${settings.speed}x
+Tom: ${settings.pitch}
+
+[MÚSICA DE ABERTURA - 10 segundos]
+[FADE OUT]
+
+${processed}
+
+[FADE IN]
+[MÚSICA DE ENCERRAMENTO - 15 segundos]
+
+=== FIM DO AUDIOLIVRO ===`;
+      
+      setNarrationScript(script);
+      setIsProcessing(false);
+      setActiveTab('script');
+    }, 1500);
+  };
+
+  const downloadScript = () => {
+    const blob = new Blob([narrationScript], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'narration-script.txt';
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const downloadSSML = () => {
+    let ssml = `<?xml version="1.0" encoding="UTF-8"?>
+<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xml:lang="pt-BR">
+  <voice name="pt-BR-Neural2-A">
+    <prosody rate="${settings.speed}" pitch="${settings.pitch}">
+`;
+
+    let content = narrationScript
+      .replace(/\[PAUSA LONGA\]/g, '<break time="2s"/>')
+      .replace(/\[PAUSA MÉDIA\]/g, '<break time="1s"/>')
+      .replace(/\[PAUSA CURTA\]/g, '<break time="0.5s"/>')
+      .replace(/\[ÊNFASE\](.*?)\[\/ÊNFASE\]/g, '<emphasis level="strong">$1</emphasis>')
+      .replace(/\[ênfase leve\](.*?)\[\/ênfase leve\]/g, '<emphasis level="moderate">$1</emphasis>')
+      .replace(/\[TOM REFLEXIVO\]/g, '<prosody rate="0.9" pitch="-2st">')
+      .replace(/\[TOM NORMAL\]/g, '</prosody>')
+      .replace(/\[TOM SOLENE\]/g, '<prosody rate="0.8" pitch="-3st">')
+      .replace(/\[MÚSICA.*?\]/g, '');
+
+    ssml += content;
+    ssml += `
+    </prosody>
+  </voice>
+</speak>`;
+
+    const blob = new Blob([ssml], { type: 'application/xml' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'audiobook.ssml';
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-purple-50 to-blue-50 p-6">
+      <div className="max-w-6xl mx-auto">
+        <header className="text-center mb-8">
+          <div className="flex items-center justify-center gap-3 mb-4">
+            <Volume2 className="w-12 h-12 text-purple-600" />
+            <h1 className="text-4xl font-bold text-gray-800">
+              Conversor HTML5 → Audiolivro
+            </h1>
+          </div>
+          <p className="text-gray-600">
+            Transforme seu livro digital em audiolivro profissional
+          </p>
+        </header>
+
+        {/* Tabs */}
+        <div className="flex gap-2 mb-6">
+          {['upload', 'settings', 'script', 'export'].map((tab) => (
+            <button
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              className={`px-6 py-3 rounded-lg font-medium transition-all ${
+                activeTab === tab
+                  ? 'bg-purple-600 text-white shadow-lg'
+                  : 'bg-white text-gray-600 hover:bg-gray-50'
+              }`}
+            >
+              {tab === 'upload' && <Upload className="inline w-4 h-4 mr-2" />}
+              {tab === 'settings' && <Settings className="inline w-4 h-4 mr-2" />}
+              {tab === 'script' && <FileText className="inline w-4 h-4 mr-2" />}
+              {tab === 'export' && <Download className="inline w-4 h-4 mr-2" />}
+              {tab.charAt(0).toUpperCase() + tab.slice(1)}
+            </button>
+          ))}
+        </div>
+
+        {/* Content */}
+        <div className="bg-white rounded-2xl shadow-xl p-8">
+          {activeTab === 'upload' && (
+            <div>
+              <h2 className="text-2xl font-bold mb-4 flex items-center gap-2">
+                <Upload className="w-6 h-6 text-purple-600" />
+                Upload do HTML5
+              </h2>
+              <textarea
+                value={htmlContent}
+                onChange={(e) => setHtmlContent(e.target.value)}
+                placeholder="Cole aqui o conteúdo HTML5 do seu livro..."
+                className="w-full h-96 p-4 border-2 border-gray-200 rounded-lg font-mono text-sm focus:border-purple-400 focus:outline-none"
+              />
+              <button
+                onClick={processHTML}
+                disabled={!htmlContent || isProcessing}
+                className="mt-4 w-full bg-purple-600 text-white py-4 rounded-lg font-bold text-lg hover:bg-purple-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-all"
+              >
+                {isProcessing ? (
+                  <span className="flex items-center justify-center gap-2">
+                    <div className="w-5 h-5 border-3 border-white border-t-transparent rounded-full animate-spin"></div>
+                    Processando...
+                  </span>
+                ) : (
+                  <span className="flex items-center justify-center gap-2">
+                    <Mic className="w-5 h-5" />
+                    Gerar Script de Narração
+                  </span>
+                )}
+              </button>
+            </div>
+          )}
+
+          {activeTab === 'settings' && (
+            <div>
+              <h2 className="text-2xl font-bold mb-6 flex items-center gap-2">
+                <Settings className="w-6 h-6 text-purple-600" />
+                Configurações de Voz
+              </h2>
+              
+              <div className="space-y-6">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Tipo de Voz
+                  </label>
+                  <select
+                    value={settings.voice}
+                    onChange={(e) => setSettings({...settings, voice: e.target.value})}
+                    className="w-full p-3 border-2 border-gray-200 rounded-lg focus:border-purple-400 focus:outline-none"
+                  >
+                    <option value="neural">Neural (Mais natural)</option>
+                    <option value="standard">Standard (Clássico)</option>
+                    <option value="wavenet">WaveNet (Premium)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Velocidade: {settings.speed}x
+                  </label>
+                  <input
+                    type="range"
+                    min="0.5"
+                    max="2.0"
+                    step="0.1"
+                    value={settings.speed}
+                    onChange={(e) => setSettings({...settings, speed: parseFloat(e.target.value)})}
+                    className="w-full"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Tom de Voz: {settings.pitch}
+                  </label>
+                  <input
+                    type="range"
+                    min="0.5"
+                    max="1.5"
+                    step="0.1"
+                    value={settings.pitch}
+                    onChange={(e) => setSettings({...settings, pitch: parseFloat(e.target.value)})}
+                    className="w-full"
+                  />
+                </div>
+
+                <div className="grid grid-cols-3 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Pausa Curta (s)
+                    </label>
+                    <input
+                      type="number"
+                      step="0.1"
+                      value={settings.pauseShort}
+                      onChange={(e) => setSettings({...settings, pauseShort: parseFloat(e.target.value)})}
+                      className="w-full p-2 border-2 border-gray-200 rounded-lg"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Pausa Média (s)
+                    </label>
+                    <input
+                      type="number"
+                      step="0.1"
+                      value={settings.pauseMedium}
+                      onChange={(e) => setSettings({...settings, pauseMedium: parseFloat(e.target.value)})}
+                      className="w-full p-2 border-2 border-gray-200 rounded-lg"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Pausa Longa (s)
+                    </label>
+                    <input
+                      type="number"
+                      step="0.1"
+                      value={settings.pauseLong}
+                      onChange={(e) => setSettings({...settings, pauseLong: parseFloat(e.target.value)})}
+                      className="w-full p-2 border-2 border-gray-200 rounded-lg"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'script' && (
+            <div>
+              <h2 className="text-2xl font-bold mb-4 flex items-center gap-2">
+                <FileText className="w-6 h-6 text-purple-600" />
+                Script de Narração
+              </h2>
+              {narrationScript ? (
+                <>
+                  <textarea
+                    value={narrationScript}
+                    onChange={(e) => setNarrationScript(e.target.value)}
+                    className="w-full h-96 p-4 border-2 border-gray-200 rounded-lg font-mono text-sm focus:border-purple-400 focus:outline-none"
+                  />
+                  <div className="mt-4 flex gap-4">
+                    <button
+                      onClick={downloadScript}
+                      className="flex-1 bg-green-600 text-white py-3 rounded-lg font-bold hover:bg-green-700 transition-all"
+                    >
+                      <Download className="inline w-5 h-5 mr-2" />
+                      Baixar Script (.txt)
+                    </button>
+                    <button
+                      onClick={() => setActiveTab('export')}
+                      className="flex-1 bg-purple-600 text-white py-3 rounded-lg font-bold hover:bg-purple-700 transition-all"
+                    >
+                      Próximo: Exportar →
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <div className="text-center py-12 text-gray-400">
+                  <FileText className="w-16 h-16 mx-auto mb-4 opacity-50" />
+                  <p>Nenhum script gerado ainda. Faça upload do HTML primeiro.</p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {activeTab === 'export' && (
+            <div>
+              <h2 className="text-2xl font-bold mb-6 flex items-center gap-2">
+                <Download className="w-6 h-6 text-purple-600" />
+                Exportar Audiolivro
+              </h2>
+              
+              <div className="space-y-4">
+                <div className="p-6 bg-purple-50 rounded-lg border-2 border-purple-200">
+                  <h3 className="font-bold text-lg mb-2">📄 Script de Texto</h3>
+                  <p className="text-gray-600 mb-4">
+                    Arquivo de texto com marcações para narrador humano
+                  </p>
+                  <button
+                    onClick={downloadScript}
+                    disabled={!narrationScript}
+                    className="w-full bg-purple-600 text-white py-3 rounded-lg font-bold hover:bg-purple-700 disabled:bg-gray-300 transition-all"
+                  >
+                    <Download className="inline w-5 h-5 mr-2" />
+                    Baixar Script (.txt)
+                  </button>
+                </div>
+
+                <div className="p-6 bg-blue-50 rounded-lg border-2 border-blue-200">
+                  <h3 className="font-bold text-lg mb-2">🎙️ SSML (Speech Synthesis)</h3>
+                  <p className="text-gray-600 mb-4">
+                    Formato para Google Cloud TTS, Amazon Polly, Azure TTS
+                  </p>
+                  <button
+                    onClick={downloadSSML}
+                    disabled={!narrationScript}
+                    className="w-full bg-blue-600 text-white py-3 rounded-lg font-bold hover:bg-blue-700 disabled:bg-gray-300 transition-all"
+                  >
+                    <Download className="inline w-5 h-5 mr-2" />
+                    Baixar SSML (.xml)
+                  </button>
+                </div>
+
+                <div className="p-6 bg-green-50 rounded-lg border-2 border-green-200">
+                  <h3 className="font-bold text-lg mb-2">🤖 Integrações Recomendadas</h3>
+                  <ul className="space-y-2 text-gray-700">
+                    <li>✓ <strong>Google Cloud Text-to-Speech</strong> - Vozes neurais PT-BR</li>
+                    <li>✓ <strong>Amazon Polly</strong> - Vitória (voz brasileira)</li>
+                    <li>✓ <strong>Azure Cognitive Services</strong> - Vozes Neural PT-BR</li>
+                    <li>✓ <strong>ElevenLabs</strong> - Clonagem de voz profissional</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Info Footer */}
+        <div className="mt-8 p-6 bg-white rounded-xl shadow-lg">
+          <h3 className="font-bold text-lg mb-3">📚 Próximos Passos:</h3>
+          <ol className="space-y-2 text-gray-700">
+            <li><strong>1.</strong> Baixe o script gerado</li>
+            <li><strong>2.</strong> Use um serviço de TTS (Text-to-Speech) para gerar o áudio</li>
+            <li><strong>3.</strong> Edite o áudio em software como Audacity ou Adobe Audition</li>
+            <li><strong>4.</strong> Adicione música de abertura/encerramento</li>
+            <li><strong>5.</strong> Exporte em formato M4B (audiobook) ou MP3</li>
+          </ol>
+        </div>
+      </div>
+    </div>
+  );
+}
